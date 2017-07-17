@@ -3158,3 +3158,77 @@ class Project(object):
             areas["Pervious (No Trees)"]["value"]=self.calculateAcreAreaFromPolygons(perviousNoTrees_clip)
 
         self.writeValuesToAreasTable(areas)
+
+
+    def exportNewToKML(self):
+
+        currentClassFolder = os.path.dirname(os.path.realpath(__file__))
+        mxd_report = arcpy.mapping.MapDocument(self.ProjectReportDocument)
+
+        newName = arcpy.CreateUniqueName(self.ProjectName+"_kml.mxd", self.ProjectFolder)
+        oldName = currentClassFolder + "\\for_kmz_export_legend.mxd"
+        mxd_kml_pth = arcpy.Copy_management(oldName,newName,"MapDocument")[0]
+        mxd_kml = arcpy.mapping.MapDocument(mxd_kml_pth)
+        mxd_kml_df = arcpy.mapping.ListDataFrames(mxd_kml)[0]
+        lyrs = arcpy.mapping.ListLayers(mxd_report)
+        cats = ["Elevation","LandCover","Enviroatlas"]
+        demFile = ""
+        totalFound = 0
+        resultsList = {}
+        legendLayersToKeep = []
+        for cat in cats:
+            fileTypes = self.getFileTypesFromCat(cat)
+            for ft,geo,ub in fileTypes:
+                eflst = self.getFiles(ft)
+                if len(eflst)==1:
+                    if cat == "Elevation":
+                        rastLyr = arcpy.MakeRasterLayer_management(eflst[0],"Digital Elevation Model")[0]
+                        print rastLyr
+                        arcpy.mapping.AddLayer(mxd_kml_df,rastLyr,"TOP")
+                        legendLayersToKeep.append(rastLyr)
+                        print legendLayersToKeep
+                        #mxd_kml.save()
+                    if cat == "LandCover" :
+                        if geo == "Raster":
+                            rastLyr = arcpy.MakeRasterLayer_management(eflst[0],"Landcover")[0]
+                            print rastLyr
+                            arcpy.mapping.AddLayer(mxd_kml_df,rastLyr,"TOP")
+                            legendLayersToKeep.append(rastLyr)
+                            print legendLayersToKeep
+                            #mxd_kml.save()
+                    if cat == "Enviroatlas":
+                        if geo == "Raster":
+                            rastLyr = arcpy.MakeRasterLayer_management(eflst[0],"Enviroatlas")[0]
+                            print rastLyr
+                            arcpy.mapping.AddLayer(mxd_kml_df,rastLyr,"TOP")
+                            legendLayersToKeep.append(rastLyr)
+                            print legendLayersToKeep
+                            #mxd_kml.save()
+        removeList = []
+        for lyr in lyrs[::-1]:
+            arcpy.mapping.AddLayer(mxd_kml_df,lyr,"TOP")
+            ul= arcpy.mapping.ListLayers(mxd_kml,lyr.name)[0]
+            if lyr.name == "FEMA Floodplain Layer (S_FLD_HAZ_AR)":
+                legendLayersToKeep.append(ul)
+            elif lyr.name == "Polygon Soils Layer with HYDGRP Field":
+                legendLayersToKeep.append(ul)
+            else:
+                removeList.append(ul)
+
+
+        legend = arcpy.mapping.ListLayoutElements(mxd_kml,"LEGEND_ELEMENT")[0]
+        #print removeList
+
+        for llyr in removeList:
+            try:
+                legend.removeItem(llyr)
+            except:
+                print llyr
+        mxd_kml_df.name = self.ProjectName
+
+
+        mxd_kml.save()
+        del(mxd_kml)
+        newNKMZ = arcpy.CreateUniqueName(self.ProjectName+"_kml.kmz", self.ProjectFolder)
+        arcpy.MapToKML_conversion(mxd_kml_pth,self.ProjectName,newNKMZ)
+
