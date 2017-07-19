@@ -821,6 +821,7 @@ class Project(object):
         if arcpy.Exists(self.ProjectDatabase+"\\"+self.GIFResultsTable):
             arcpy.DeleteRows_management(self.ProjectDatabase+"\\"+self.GIFResultsTable)
         self._deleteList = []
+        self.checkOut()
         self.createRiparianAreas()
         self.createTreeAreas()
         self.groundwaterRecharge()
@@ -3041,18 +3042,22 @@ class Project(object):
         parkingImperviousLayer = None
         perviousLayer = None
         if perviousFile !="":
+            perviousFile = arcpy.Clip_analysis(perviousFile,clippingBoundary,"pervious_clip")[0]
             areas["Total Pervious From Landcover"]["value"]=self.calculateAcreAreaFromPolygons(perviousFile)
             perviousLayer = arcpy.MakeFeatureLayer_management(perviousFile,"perviousLayerCalcAll")[0]
 
         if existingImperviousFile !="":
+            existingImperviousFile = arcpy.Clip_analysis(existingImperviousFile,clippingBoundary,"existingImpervious_clip")[0]
             areas["Impervious (Landcover)"]["value"]=self.calculateAcreAreaFromPolygons(existingImperviousFile)
             imperviousLandCoverLayer = arcpy.MakeFeatureLayer_management(existingImperviousFile,"imperviousLandCoverLayerAll")[0]
 
         if buildingFile !="":
+            buildingFile = arcpy.Clip_analysis(buildingFile,clippingBoundary,"building_clip")[0]
             areas["Impervious (Building Footprints if Available)"]["value"]=self.calculateAcreAreaFromPolygons(buildingFile)
             buildingLayer = arcpy.MakeFeatureLayer_management(buildingFile,"buildingLayerAll")[0]
 
         if proposedImperviousFile !="":
+            proposedImperviousFile = arcpy.Clip_analysis(proposedImperviousFile,clippingBoundary,"proposedImpervious_clip")[0]
             areas["Impervious (Parking, Road if Available)"]["value"]=self.calculateAcreAreaFromPolygons(proposedImperviousFile)
             parkingImperviousLayer = arcpy.MakeFeatureLayer_management(proposedImperviousFile,"parkingImperviousLayerAll")[0]
 
