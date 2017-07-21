@@ -732,10 +732,10 @@ class Project(object):
                         areasOfMinCompacFile = eflst[0]
                         totalFound +=1
                         arcpy.AddMessage("Areas of Minimum Soil Compaction")
-        if arcpy.Exists(areasOfMinCompacFile):
-            areas["Total Area of Minimum Soil Compaction"]={"mapped":"No","value":0.0,"units":""}
-            areas["Total Area of Minimum Soil Compaction"]["value"] = self.calculateAcreAreaFromPolygons(areasOfMinCompacFile,"SQUAREFEET")
-            areas["Total Area of Minimum Soil Compaction"]["units"]="SQUARE FEET"
+        #if arcpy.Exists(areasOfMinCompacFile):
+            #areas["Total Area of Minimum Soil Compaction"]={"mapped":"No","value":0.0,"units":""}
+            #areas["Total Area of Minimum Soil Compaction"]["value"] = self.calculateAcreAreaFromPolygons(areasOfMinCompacFile,"SQUAREFEET")
+            #areas["Total Area of Minimum Soil Compaction"]["units"]="SQUARE FEET"
 
         if arcpy.Exists(buildingFile):
             areas["Total Building Footprint Area"]={"mapped":"No","value":0.0,"units":""}
@@ -747,15 +747,15 @@ class Project(object):
             areas["Total Protected Area"]["value"] = self.calculateAcreAreaFromPolygons(protectedAreaFile,"SQUAREFEET")
             areas["Total Protected Area"]["units"]="SQUARE FEET"
 
-        if arcpy.Exists(treesFile) and arcpy.Exists(protectedAreaFile):
-            protectedAreaGeom = arcpy.Dissolve_management(protectedAreaFile,arcpy.Geometry())[0]
-            treesGeoms = arcpy.CopyFeatures_management(treesFile,arcpy.Geometry())
-            if len(treesGeoms) >0:
-                treesGeom=treesGeoms[0]
-                treesGeom.difference(protectedAreaGeom.projectAs(treesGeom.spatialReference))
-                areas["Total Tree Area Not in Protected Area"]={"mapped":"No","area":0.0,"units":""}
-                areas["Total Tree Area Not in Protected Area"]["value"] = treesGeom.getArea("PLANAR","SQUAREFEET")
-                areas["Total Tree Area Not in Protected Area"]["units"]="SQUARE FEET"
+        #if arcpy.Exists(treesFile) and arcpy.Exists(protectedAreaFile):
+            #protectedAreaGeom = arcpy.Dissolve_management(protectedAreaFile,arcpy.Geometry())[0]
+            #treesGeoms = arcpy.CopyFeatures_management(treesFile,arcpy.Geometry())
+            #if len(treesGeoms) >0:
+                #treesGeom=treesGeoms[0]
+                #treesGeom.difference(protectedAreaGeom.projectAs(treesGeom.spatialReference))
+                #areas["Total Tree Area Not in Protected Area"]={"mapped":"No","area":0.0,"units":""}
+                #areas["Total Tree Area Not in Protected Area"]["value"] = treesGeom.getArea("PLANAR","SQUAREFEET")
+                #areas["Total Tree Area Not in Protected Area"]["units"]="SQUARE FEET"
 
         areas["Project Boundary Area"]["value"]=self.calculateAcreAreaFromPolygons(self.ProjectBoundsDBPath)
         self.writeValuesToAreasTable(areas)
@@ -2443,27 +2443,28 @@ class Project(object):
 
 
         if useExisting == False:
-            if arcpy.Exists(protectedAreaFile):
-                clip_existing = arcpy.Clip_analysis(existingImperviousFile,protectedAreaFile,"ProtectedAreaImpervious")[0]
-            else:
-                clip_existing = existingImperviousFile
+
             if buildingFile != "":
                 arcpy.env.overwriteOutput = True
-                allImpervious_union = arcpy.Union_analysis([buildingFile,proposedImperviousFile,clip_existing],"allImpervious_union")[0]
+                allImpervious_union = arcpy.Union_analysis([buildingFile,proposedImperviousFile,existingImperviousFile],"allImpervious_union")[0]
                 allImpervious_dissolve = arcpy.Dissolve_management(allImpervious_union,'allImpervious_diss')[0]
+                allImpervious_dissolve = arcpy.Clip_analysis(allImpervious_dissolve,clippingBoundary,'allImpervious_diss_clip')[0]
             else:
                 arcpy.env.overwriteOutput = True
                 allImpervious_union = arcpy.Union_analysis([proposedImperviousFile,clip_existing],"allImpervious_union")[0]
                 allImpervious_dissolve = arcpy.Dissolve_management(allImpervious_union,'allImpervious_diss')[0]
+                allImpervious_dissolve = arcpy.Clip_analysis(allImpervious_dissolve,clippingBoundary,'allImpervious_diss_clip')[0]
         else:
             if buildingFile != "":
                 arcpy.env.overwriteOutput = True
                 allImpervious_union = arcpy.Union_analysis([buildingFile,existingImperviousFile],"allImpervious_union")[0]
                 allImpervious_dissolve = arcpy.Dissolve_management(allImpervious_union,'allImpervious_diss')[0]
+                allImpervious_dissolve = arcpy.Clip_analysis(allImpervious_dissolve,clippingBoundary,'allImpervious_diss_clip')[0]
             else:
                 arcpy.env.overwriteOutput = True
                 allImpervious_union = arcpy.Union_analysis([existingImperviousFile],"allImpervious_union")[0]
                 allImpervious_dissolve = arcpy.Dissolve_management(allImpervious_union,'allImpervious_diss')[0]
+                allImpervious_dissolve = arcpy.Clip_analysis(allImpervious_dissolve,clippingBoundary,'allImpervious_diss_clip')[0]
         #Buffer Criteria
         arcpy.AddMessage("Creating Distance Criteria")
         try:
@@ -3021,6 +3022,7 @@ class Project(object):
         "Impervious Landcover Minus Buildings":{"value":0},
         }
 
+
         clippingBoundary = None
         if protectedAreaFile != "":
             prjBoundaryGeom =arcpy.CopyFeatures_management(self.ProjectBoundsDBPath,arcpy.Geometry())
@@ -3035,7 +3037,7 @@ class Project(object):
             clippingBoundary = arcpy.Dissolve_management(projectWithProtectedAreaRemoved,"projectareaprotectedarea_dissolve")[0]
         else:
             clippingBoundary = self.ProjectBoundsDBPath
-        print(clippingBoundary)
+
 
         imperviousLandCoverLayer = None
         buildingLayer = None
@@ -3064,106 +3066,83 @@ class Project(object):
         if treesFile != "":
             treesLayerAll = arcpy.MakeFeatureLayer_management(treesFile,"treeslayerAll")[0]
 
+        perviousBase = None
+        if perviousLayer:
+            removeGeometry = []
+            perviousGeoms = arcpy.CopyFeatures_management(perviousFile,arcpy.Geometry())
+            perviousGeomsNoImperv = []
+            if buildingLayer:
+                removeGeometry += arcpy.CopyFeatures_management(buildingLayer,arcpy.Geometry())
+            if parkingImperviousLayer:
+                removeGeometry += arcpy.CopyFeatures_management(parkingImperviousLayer,arcpy.Geometry())
+            perviousGeomsNoImperv = self.removeGeometry(perviousGeoms,removeGeometry)
+            perviousGeomsNoImpervDissolve = arcpy.Dissolve_management(perviousGeomsNoImperv,"perviousGeomsNoImperv_dissolve")[0]
+            perviousBase = arcpy.Clip_analysis(perviousGeomsNoImpervDissolve,clippingBoundary,"perviousGeomsNoImperv_clip")[0]
+            areas["Total Pervious From Landcover Minus Building Footprints and Parking and Roads"]["value"]=self.calculateAcreAreaFromPolygons(perviousBase)
+
+            if treesLayerAll:
+                arcpy.env.workspace = self.ProjectDatabase
+                arcpy.env.overwriteOutput = True
+                perviousTrees = arcpy.Intersect_analysis([perviousBase,treesLayerAll],"pervious_trees_intersect")[0]
+                perviousTreesDiss = arcpy.Dissolve_management(perviousTrees,"pervious_trees_diss")[0]
+                areas["Pervious (Trees)"]["value"]=self.calculateAcreAreaFromPolygons(perviousTreesDiss)
+                treesGeometry = arcpy.CopyFeatures_management(treesLayerAll,arcpy.Geometry())
+                perviousGeoms = arcpy.CopyFeatures_management(perviousBase,arcpy.Geometry())
+                perviousGeomsNoTrees = self.removeGeometry(perviousGeoms,treesGeometry)
+                perviousNoTreesDissolve = arcpy.Dissolve_management(perviousGeomsNoTrees,"allPerviousNoTrees_dissolve")[0]
+                perviousNoTrees_clip = arcpy.Clip_analysis(perviousNoTreesDissolve,clippingBoundary,"allPerviousNoTrees_clip")[0]
+                areas["Pervious (No Trees)"]["value"]=self.calculateAcreAreaFromPolygons(perviousNoTrees_clip)
+
+
+
         perviousGeomsNoImperv_clip = None
+
 
 
         #"Total Impervious From Landcover, Building Footprints, and Parking and Roads"
         if imperviousLandCoverLayer:
-            lyrsToCombine = [parkingImperviousLayer,buildingLayer]
-            for lyr in lyrsToCombine:
-                if lyr == None:
-                    lyrsToCombine.remove(lyr)
-            if len(lyrsToCombine) > 0:
-
-                arcpy.env.workspace = self.ProjectDatabase
-                arcpy.env.overwriteOutput = True
-                allLyrs = [imperviousLandCoverLayer]+lyrsToCombine
-                print allLyrs
-                TotalImpervious_union = arcpy.Union_analysis(allLyrs,"TotalImpervious_union")[0]
-                print(TotalImpervious_union)
-                TotalImpervious_dissolve = arcpy.Dissolve_management(TotalImpervious_union,'TotalImpervious_diss')[0]
-                print(TotalImpervious_dissolve)
-                TotalImpervious_clip = arcpy.Clip_analysis(TotalImpervious_dissolve,clippingBoundary,"TotalImpervious_clip")[0]
-                print(TotalImpervious_clip)
-                areas["Total Impervious From Landcover, Building Footprints, and Parking and Roads"]["value"]=self.calculateAcreAreaFromPolygons(TotalImpervious_clip)
-                print(areas)
-                removeGeometry = []
-
-
-                imperviousLandCoverRemove_clip=None
-                if buildingLayer:
-                    removeGeometry = arcpy.CopyFeatures_management(buildingLayer,arcpy.Geometry())
-                    imperviousGeoms = arcpy.CopyFeatures_management(imperviousLandCoverLayer,arcpy.Geometry())
-                    imperviousGeomsRemove = []
-                    print(len(imperviousGeoms))
-                    print(len(removeGeometry))
-                    for imperviousGeom in imperviousGeoms:
-                        for geomT in removeGeometry:
-                            geomT_sr = geomT.projectAs(imperviousGeom.spatialReference)
-                            imperviousGeom = imperviousGeom.difference(geomT_sr)
-                        imperviousGeomsRemove.append(imperviousGeom)
-
-                    imperviousLandCoverRemoveDissolve = arcpy.Dissolve_management(imperviousGeomsRemove,"imperviousLandCoverRemoveBld_dissolve")[0]
-                    imperviousLandCoverRemove_clip = arcpy.Clip_analysis(imperviousLandCoverRemoveDissolve,clippingBoundary,"imperviousLandCoverRemoveBld_clip")[0]
-                    areas["Impervious Landcover Minus Buildings"]["value"]=self.calculateAcreAreaFromPolygons(imperviousLandCoverRemove_clip)
-                    print(areas)
-
-                if parkingImperviousLayer:
-                    if imperviousLandCoverRemove_clip:
-                        imperviousGeoms = arcpy.CopyFeatures_management(imperviousLandCoverRemove_clip,arcpy.Geometry())
-                    else:
-                        imperviousGeoms = arcpy.CopyFeatures_management(imperviousLandCoverLayer,arcpy.Geometry())
-                    imperviousGeomsRemove = []
-                    print(len(imperviousGeoms))
-                    print(len(removeGeometry))
-                    for imperviousGeom in imperviousGeoms:
-                        for geomT in removeGeometry:
-                            geomT_sr = geomT.projectAs(imperviousGeom.spatialReference)
-                            imperviousGeom = imperviousGeom.difference(geomT_sr)
-                        imperviousGeomsRemove.append(imperviousGeom)
-                        print(len(imperviousGeomsRemove))
-                    print("dissolving impervious areas")
-                    imperviousLandCoverRemoveDissolve = arcpy.Dissolve_management(imperviousGeomsRemove,"imperviousLandCoverRemove_dissolve")[0]
-                    print("clipping impervious areas")
-                    imperviousLandCoverRemove_clip = arcpy.Clip_analysis(imperviousLandCoverRemoveDissolve,clippingBoundary,"imperviousLandCoverRemove_clip")[0]
-                    areas["Impervious Landcover Minus Buildings, Roads and parking"]["value"]=self.calculateAcreAreaFromPolygons(imperviousLandCoverRemove_clip)
-                    print(areas)
-
-                perviousGeoms = arcpy.CopyFeatures_management(perviousFile,arcpy.Geometry())
-                perviousGeomsNoImperv = []
-                for perviousGeom in perviousGeoms:
-                    for geomT in removeGeometry:
-                        geomT_sr = geomT.projectAs(imperviousGeom.spatialReference)
-                        perviousGeom = perviousGeom.difference(geomT_sr)
-                    perviousGeomsNoImperv.append(perviousGeom)
-
-                perviousGeomsNoImpervDissolve = arcpy.Dissolve_management(perviousGeomsNoImperv,"perviousGeomsNoImperv_dissolve")[0]
-                perviousGeomsNoImperv_clip = arcpy.Clip_analysis(perviousGeomsNoImpervDissolve,clippingBoundary,"perviousGeomsNoImperv_clip")[0]
-                areas["Total Pervious From Landcover Minus Building Footprints and Parking and Roads"]["value"]=self.calculateAcreAreaFromPolygons(perviousGeomsNoImperv_clip)
-                print(areas)
-        if perviousGeomsNoImperv_clip and treesLayerAll:
             arcpy.env.workspace = self.ProjectDatabase
             arcpy.env.overwriteOutput = True
-            perviousTreesSoil = arcpy.Intersect_analysis([perviousLayer,treesLayerAll],"pervious_trees_intersect")[0]
-            perviousTreesSoil = arcpy.Dissolve_management(perviousTreesSoil,"pervious_trees_soil")[0]
-            areas["Pervious (Trees)"]["value"]=self.calculateAcreAreaFromPolygons(perviousTreesSoil)
-            print(areas)
-            treesGeometry = arcpy.CopyFeatures_management(treesFile,arcpy.Geometry())
-            treesFileSR = arcpy.Describe(treesFile).spatialReference
-            perviousGeoms = arcpy.CopyFeatures_management(perviousFile,arcpy.Geometry())
-            perviousGeomsNoTrees = []
-            for perviousGeom in perviousGeoms:
-                for tree in treesGeometry:
-                    tree_sr = tree.projectAs(perviousGeom.spatialReference)
-                    perviousGeom = perviousGeom.difference(tree_sr)
-                perviousGeomsNoTrees.append(perviousGeom)
+            if buildingLayer and parkingImperviousLayer:
+                TotalImpervious_union = arcpy.Union_analysis([buildingLayer,parkingImperviousLayer,imperviousLandCoverLayer],"TotalImpervious_union")[0]
+                TotalImpervious_dissolve = arcpy.Dissolve_management(TotalImpervious_union,'TotalImpervious_diss')[0]
+                TotalImpervious_clip = arcpy.Clip_analysis(TotalImpervious_dissolve,clippingBoundary,"TotalImpervious_clip")[0]
+                areas["Total Impervious From Landcover, Building Footprints, and Parking and Roads"]["value"]=self.calculateAcreAreaFromPolygons(TotalImpervious_clip)
+                removeGeometry = []
+                removeGeometry = arcpy.CopyFeatures_management(buildingLayer,arcpy.Geometry())
+                removeGeometry += arcpy.CopyFeatures_management(parkingImperviousLayer,arcpy.Geometry())
+                imperviousGeoms = arcpy.CopyFeatures_management(imperviousLandCoverLayer,arcpy.Geometry())
+                imperviousGeomsRemove = self.removeGeometry(imperviousGeoms,removeGeometry)
+                print("dissolving impervious areas")
+                imperviousLandCoverRemoveDissolve = arcpy.Dissolve_management(imperviousGeomsRemove,"imperviousLandCoverRemove_dissolve")[0]
+                print("clipping impervious areas")
+                imperviousLandCoverRemove_clip = arcpy.Clip_analysis(imperviousLandCoverRemoveDissolve,clippingBoundary,"imperviousLandCoverRemove_clip")[0]
+                areas["Impervious Landcover Minus Buildings, Roads and parking"]["value"]=self.calculateAcreAreaFromPolygons(imperviousLandCoverRemove_clip)
 
-            perviousNoTreesDissolve = arcpy.Dissolve_management(perviousGeomsNoTrees,"allPerviousNoTrees_dissolve")[0]
-            perviousNoTrees_clip = arcpy.Clip_analysis(perviousNoTreesDissolve,clippingBoundary,"allPerviousNoTrees_clip")[0]
-            areas["Pervious (No Trees)"]["value"]=self.calculateAcreAreaFromPolygons(perviousNoTrees_clip)
+            if buildingLayer:
+                removeGeometry = []
+                removeGeometry = arcpy.CopyFeatures_management(buildingLayer,arcpy.Geometry())
+                imperviousGeoms = arcpy.CopyFeatures_management(imperviousLandCoverLayer,arcpy.Geometry())
+                imperviousGeomsRemove = self.removeGeometry(imperviousGeoms,removeGeometry)
+                imperviousLandCoverRemoveDissolve = arcpy.Dissolve_management(imperviousGeomsRemove,"imperviousLandCoverRemoveBld_dissolve")[0]
+                imperviousLandCoverRemove_clip = arcpy.Clip_analysis(imperviousLandCoverRemoveDissolve,clippingBoundary,"imperviousLandCoverRemoveBld_clip")[0]
+                areas["Impervious Landcover Minus Buildings"]["value"]=self.calculateAcreAreaFromPolygons(imperviousLandCoverRemove_clip)
 
         self.writeValuesToAreasTable(areas)
 
+    def removeGeometry(self,baseList,removeGeometries):
+        """baseList - list of geometries
+        removeGeometries - list of geometries to be removed from base
+        returns list of cleaned geometries, or copy of baseList if removeGeometries is empty"""
+        if len(removeGeometries) == 0:
+            return baseList
+        returnList = []
+        for kpGeom in baseList:
+            for rmGeom in removeGeometries:
+                rmGeom_sr = rmGeom.projectAs(kpGeom.spatialReference)
+                kpGeom = kpGeom.difference(rmGeom_sr)
+            returnList.append(kpGeom)
+        return returnList
 
     def exportNewToKML(self):
 
